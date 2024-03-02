@@ -10,4 +10,11 @@ import (
 	"sync"
 
 	"SLKV/utils"
+	"github.com/pkg/errors"
 )
+
+// WalFile _
+type WalFile struct {
+	lock *sync.RWMutex
+	f *MmapFile
+}
