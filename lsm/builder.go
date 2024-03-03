@@ -100,6 +100,7 @@ func (tb *tableBuilder) tryFinishBlock(e *utils.Entry) bool {
 	if len(tb.curBlock.entryOffsets) <= 0 {
 		return false
 	}
+	// + 1, last entry offset
 	utils.CondPanic(!((uint32(len(tb.curBlock.entryOffsets))+1)*4+4+8+4 < math.MaxUint32), errors.New("Integer overflow"))
 	entriesOffsetsSize := int64((len(tb.curBlock.entryOffsets)+1)*4 +
 		4 + // size of list
@@ -108,7 +109,11 @@ func (tb *tableBuilder) tryFinishBlock(e *utils.Entry) bool {
 
 	tb.curBlock.estimateSz = int64(tb.curBlock.end) + int64(6 /*header size for entry */) +
 		int64(len(e.Key)) + int64(e.EncodedSize()) + entriesOffsetsSize
+	
+	// Integer overflow check for table size.
+	utils.CondPanic(!(uint64(tb.curBlock.end) + uint64(tb.curBlock.estimateSz) < math.MaxUint32), errors.New("Integer overflow"))
 
+	return tb.curBlock.estimateSz > int64(tb.opt.BlockSize)
 }
 
 func (tb *tableBuilder) finishBlock() {
@@ -116,12 +121,26 @@ func (tb *tableBuilder) finishBlock() {
 		return
 	}
 	// Append the entryOffsets and its length.
+	tb.append(utils.U32SliceToBytes(tb.curBlock.entryOffsets))
+	tb.append(utils.U32ToBytes(uint32(len(tb.curBlock.entryOffsets))))
 
+	checksum := tb.calculateChecksum(tb.curBlock.data[:tb.curBlock.end])
+
+	// Append the block checksum and its length
+	tb.append(checksum)
+	tb.append(utils.U32ToBytes(uint32(len(checksum))))
+	tb.estimateSz += tb.curBlock.estimateSz
+	tb.blockList = append(tb.blockList, tb.curBlock)
+	// TODO: Estimate the size of the SST file after organizing the builder's writes to disk.
+	tb.keyCount += uint32(len(tb.curBlock.entryOffsets))
+	tb.curBlock = nil // indicates that current block has been serialized to memory
+	return
 }
 
 // append appends to curBlock.data
 func (tb *tableBuilder) append(data []byte) {
-
+	dst := tb.allocate(len(data))
+	utils.CondPanic(len(data) != copy(dst, data), errors.New("tableBuilder.append data"))
 }
 
 func (tb *tableBuilder) allocate(need int) []byte {

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/pkg/errors"
 )
@@ -114,9 +115,21 @@ func RemoveDir(dir string) {
 	}
 }
 
+// BytesToU32 converts the given byte slice to uint32
+func BytesToU32(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b)
+}
+
 // BytesToU64
 func BytesToU64(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
+}
+
+// U32ToBytes converts the given Uint32 to bytes
+func U32ToBytes(v uint32) []byte {
+	var uBuf [4]byte
+	binary.BigEndian.PutUint32(uBuf[:], v)
+	return uBuf[:]
 }
 
 // U64ToBytes converts the given Uint64 to bytes
@@ -124,4 +137,36 @@ func U64ToBytes(v uint64) []byte {
 	var uBuf [8]byte
 	binary.BigEndian.PutUint64(uBuf[:], v)
 	return uBuf[:]
+}
+
+// U32SliceToBytes converts the given Uint32 slice to byte slice
+func U32SliceToBytes(u32s []uint32) []byte {
+	if len(u32s) == 0 {
+		return nil
+	}
+	// 获取切片的第一个元素的地址，并将其转换为 *byte 类型的指针
+	ptr := unsafe.Pointer(&u32s[0])
+	// 计算字节切片的长度
+	length := len(u32s) * 4
+	// 使用 unsafe 包的 Slice 函数将指针转换为字节切片
+	return *(*[]byte)(unsafe.Pointer(&struct {
+		data uintptr
+		len  int
+		cap  int
+	}{uintptr(ptr), length, length}))
+}
+
+// BytesToU32Slice converts the given byte slice to uint32 slice
+func BytesToU32Slice(b []byte) []uint32 {
+	if len(b) == 0 {
+		return nil
+	}
+	// 计算字节切片的长度
+	length := len(b) / 4
+	// 使用 unsafe 包的 Slice 函数将字节切片转换为 uint32 切片
+	return *(*[]uint32)(unsafe.Pointer(&struct {
+		data uintptr
+		len  int
+		cap  int
+	}{uintptr(unsafe.Pointer(&b[0])), length, length}))
 }
