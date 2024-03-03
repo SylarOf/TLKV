@@ -45,3 +45,46 @@ type Entry struct {
 	Value     []byte
 	ExpiresAt uint64
 }
+
+// NewEntry
+func NewEntry(key, value []byte) *Entry {
+	return &Entry{
+		Key:   key,
+		Value: value,
+	}
+}
+
+// Entry
+func (e *Entry) Entry() *Entry {
+	return e
+}
+
+func (e *Entry) IsDeletedOrExpired() bool {
+	if e.Value == nil {
+		return true
+	}
+
+	if e.ExpiresAt == 0 {
+		return false
+	}
+
+	return e.ExpiresAt <= uint64(time.Now().Unix())
+}
+
+// WithTTL
+func (e *Entry) WithTTL(dur time.Duration) *Entry {
+	e.ExpiresAt = uint64(time.Now().Add(dur).Unix())
+	return e
+}
+
+// EncodedSize is the size of the ValueStruct when encoded
+func (e *Entry) EncodedSize() uint32 {
+	sz := len(e.Value)
+	enc := sizeVarint(e.ExpiresAt)
+	return uint32(sz + enc)
+}
+
+// EstimateSize
+func (e *Entry) EstimateSize() int {
+	return len(e.Key) + len(e.Value)
+}

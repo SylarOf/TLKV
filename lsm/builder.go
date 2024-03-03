@@ -81,16 +81,16 @@ func newTableBuilerWithSSTSize(opt *Options, size int64) *tableBuilder {
 
 func newTableBuiler(opt *Options) *tableBuilder {
 	return &tableBuilder{
-		opt: opt,
+		opt:     opt,
 		sstSize: opt.SSTableMaxSz,
 	}
 }
 
 // Empty returns whether it's empty
-func (tb *tableBuilder) empty() bool {return len(tb.keyHashes) == 0}
+func (tb *tableBuilder) empty() bool { return len(tb.keyHashes) == 0 }
 
 func (tb *tableBuilder) finish() []byte {
-	
+
 }
 
 func (tb *tableBuilder) tryFinishBlock(e *utils.Entry) bool {
@@ -100,13 +100,48 @@ func (tb *tableBuilder) tryFinishBlock(e *utils.Entry) bool {
 	if len(tb.curBlock.entryOffsets) <= 0 {
 		return false
 	}
-	utils.CondPanic(!((uint32(len(tb.curBlock.entryOffsets)) + 1)*4 +4+8+4 < math.MaxUint32), errors.New("Integer overflow"))
-	entriesOffsetsSize := int64((len(tb.curBlock.entryOffsets)+1) *4 +
+	utils.CondPanic(!((uint32(len(tb.curBlock.entryOffsets))+1)*4+4+8+4 < math.MaxUint32), errors.New("Integer overflow"))
+	entriesOffsetsSize := int64((len(tb.curBlock.entryOffsets)+1)*4 +
 		4 + // size of list
 		8 + // sum64 in checksum proto
 		4) // checksum length
 
 	tb.curBlock.estimateSz = int64(tb.curBlock.end) + int64(6 /*header size for entry */) +
 		int64(len(e.Key)) + int64(e.EncodedSize()) + entriesOffsetsSize
-	
+
+}
+
+func (tb *tableBuilder) finishBlock() {
+	if tb.curBlock == nil || len(tb.curBlock.entryOffsets) == 0 {
+		return
+	}
+	// Append the entryOffsets and its length.
+
+}
+
+// append appends to curBlock.data
+func (tb *tableBuilder) append(data []byte) {
+
+}
+
+func (tb *tableBuilder) allocate(need int) []byte {
+	bb := tb.curBlock
+	if len(bb.data[bb.end:]) < need {
+		// need to reallocate
+		sz := 2 * len(bb.data)
+		if bb.end+need > sz {
+			sz = bb.end + need
+		}
+		tmp := make([]byte, sz) // to do here can use memory allocator to improve performance
+		copy(tmp, bb.data)
+		bb.data = tmp
+	}
+	bb.end += need
+	return bb.data[bb.end-need : bb.end]
+}
+
+// calculate Checksum
+func (tb *tableBuilder) calculateChecksum(data []byte) []byte {
+	checkSum := utils.CalculateChecksum(data)
+	return utils.U64ToBytes(checkSum)
 }

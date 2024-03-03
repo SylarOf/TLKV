@@ -280,7 +280,7 @@ func (s *Skiplist) Search(key []byte) ValueStruct {
 
 
 func SameKey(src []byte, dst []byte) bool
-func CompareKeys(x []byte, y []byte) int
+
 // go:linkname FastRand runtime.fastrand
 func FastRand() uint32
 
