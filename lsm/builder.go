@@ -14,6 +14,8 @@ import (
 	"TLKV/file"
 	"TLKV/pb"
 	"TLKV/utils"
+
+	"golang.org/x/tools/go/analysis/passes/defers"
 )
 
 type tableBuilder struct {
@@ -355,6 +357,7 @@ func (itr *blockIterator) setBlock(b *block) {
 
 // seekToFirst brings us to the first element
 func (itr *blockIterator) seekToFirst() {
+	itr.setIdx(0)
 	
 }
 
@@ -376,5 +379,63 @@ func (itr *blockIterator) setIdx(i int) {
 
 	var endOffset int
 	// idx points to the last entry in the block
-	
+	if itr.idx+1 == len(itr.entryOffsets) {
+		endOffset = len(itr.data)
+	} else {
+		// idx point to some entry other than the last one in the block
+		// EndOffset of the current entry is the start offset of the next entry
+		endOffset = int(itr.entryOffsets[itr.idx+1])
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			var debugBuf bytes.Buffer
+			fmt.Fprintf(&debugBuf, "==== Recovered====\n")
+			fmt.Fprintf(&debugBuf, "Table ID: %d\nBlock ID: %d\nEntry Idx: %d\nData len: %d\n"+
+				"StartOffset: %d\nEndOffset: %d\nEntryOffsets len: %d\nEntryOffsets: %v\n",
+				itr.tableID, itr.blockID, itr.idx, len(itr.data), startOffset, endOffset,
+				len(itr.entryOffsets), itr.entryOffsets)
+			panic(debugBuf.String())
+		}
+	}()
+
+	entryData := itr.data[startOffset:endOffset]
+	var h header
+	h.decode(entryData)
+	if h.overlap > itr.prevOverlap {
+		itr.key = append(itr.key[:itr.prevOverlap], itr.baseKey[itr.prevOverlap:h.overlap]...)
+	}
+
+	itr.prevOverlap = h.overlap
+	valueOff := headerSize + h.diff
+	diffKey := entryData[headerSize:valueOff]
+	itr.key = append(itr.key[:h.overlap], diffKey...)
+	e := &utils.Entry{Key: itr.key}
+	val := &utils.ValueStruct{}
+	val.DecodeValue(entryData[valueOff:])
+	itr.val = val.Value
+	e.Value = val.Value
+	e.ExpiresAt = val.ExpiresAt
+	itr.it = &Item{e: e}
+}
+
+func (itr *blockIterator) Error() error {
+	return itr.err
+}
+
+func (itr *blockIterator) Next() {
+	itr.setIdx(itr.idx + 1)
+}
+
+func (itr *blockIterator) Valid() bool {
+	return itr.err != io.EOF // TODO 这里用err比较好
+}
+func (itr *blockIterator) Rewind() bool {
+	itr.setIdx(0)
+	return true
+}
+func (itr *blockIterator) Item() utils.Item {
+	return itr.it
+}
+func (itr *blockIterator) Close() error {
+	return nil
 }
